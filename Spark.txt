@@ -1,0 +1,92 @@
+val startTime = System.currentTimeMillis()
+
+def pairs(str: Array[String]) = {
+  val users = str(1).split(",")
+  val user = str(0)
+
+  val n = users.length
+
+  for (i <- 0 until n) yield {
+    val pair = if (user < users(i)) {
+      (user, users(i))
+    } else {
+      (users(i), user)
+    }
+    (pair, users)
+  }
+}
+
+val data = sc.textFile("file:///home/sbrhg/Downloads/pro2/input1.txt")
+val limitedData = sc.parallelize(data.take(39997));
+val data1 = limitedData.map(x => x.split("\t")).filter(li => li.size == 2)
+
+val pairCounts = data1.flatMap(pairs).reduceByKey { case (param1, param2) =>
+  (param1.intersect(param2))
+}
+
+val sortedPairCounts = pairCounts.map { case ((person1, person2), mutualFriends) =>
+  (Array(person1.toInt, person2.toInt).sorted, mutualFriends)
+}
+
+val p1 = sortedPairCounts.map { case (sortedKeys, mutualFriends) =>
+  ((sortedKeys(0), sortedKeys(1)), mutualFriends.toSet)
+}
+
+val endTime = System.currentTimeMillis()
+val runtime = endTime - startTime
+println(s"Total runtime: $runtime milliseconds")
+
+p1.coalesce(1).saveAsTextFile("/home/sbrhg/Downloads/pro2/OutputFolder1")
+
+// -------------------------------------------- 2-1 -----------------------
+val startTime1 = System.currentTimeMillis()
+
+val maxMutualFriendsCount = p1.map { case (_, mutuals) => mutuals.size }.max
+val friendsWithMaxMutualFriends = p1.filter { case (_, mutuals) =>
+  mutuals.size == maxMutualFriendsCount
+}
+
+// Join the keys with maxMutualFriendsCount and save the result
+val p2 = friendsWithMaxMutualFriends.map { case (key, _) =>
+  s"$key $maxMutualFriendsCount"
+}
+
+p2.coalesce(1).saveAsTextFile("/home/sbrhg/Downloads/pro2/OutputFolder2")
+
+// -------------------------------------------- 2-2 -----------------------
+val result2 = p1.map { case (key, mutuals) =>
+  val mutualFriends = mutuals.filter(mutual =>
+    mutual.toString.startsWith("1") || mutual.toString.startsWith("5"))
+  (key, mutualFriends)
+}
+
+result2.coalesce(1).saveAsTextFile("/home/sbrhg/Downloads/pro2/OutputFolder3")
+
+val endTime1 = System.currentTimeMillis()
+val runtime1 = endTime1 - startTime1
+println(s"Total runtime: $runtime1 milliseconds")
+
+// ---------------------------------------------- 3-1 --------------------------------------
+val startTime2 = System.currentTimeMillis()
+val totalMutualFriends = p1.map { case (_, mutualFriends) =>
+  mutualFriends.size
+}.sum()
+
+// Calculate the total number of pairs
+val totalPairs = p1.count()
+val totalFruits = p1.map { case (_, mutualFriends) =>
+  mutualFriends.size
+}.reduce(_ + _)
+
+val avg = totalMutualFriends.toDouble / totalPairs.toDouble
+
+println(s"-------------------------------------------$avg--------------------------------$totalPairs---------$totalFruits")
+
+val aboveAverageFriends = p1.filter { case (_, mutuals) =>
+  mutuals.size > avg
+}
+
+aboveAverageFriends.coalesce(1).saveAsTextFile("/home/sbrhg/Downloads/pro2/OutputFolder5")
+
+val endTime2 = System.currentTimeMillis()
+val runtime2 = endTime2 - startTime2
